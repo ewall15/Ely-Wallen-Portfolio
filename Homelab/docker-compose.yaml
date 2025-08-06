@@ -1,0 +1,136 @@
+services:
+  gluetun:
+    image: qmcgaw/gluetun
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - 8080:8080
+      - 8112:8112
+      - 58846:58846
+      - 58946:58946
+      - 58946:58946/udp
+      - 9696:9696
+      - 7878:7878
+      - 8989:8989
+      - 6881:6881
+      - 6881:6881/udp
+    volumes:
+      - ./gluetun:/gluetun
+    environment:
+      VPN_SERVICE_PROVIDER: mullvad
+      VPN_TYPE: openvpn
+      OPENVPN_USER: "Redacted"
+      OPENVPN_PASSWORD: "REDACTED"
+      SERVER_COUNTRIES: COUNTRY
+      SERVER_CITIES: CITY
+      VPN_PASSTHROUGH: "true"
+      TZ: Etc/UTC
+      LOG_LEVEL: info
+    restart: unless-stopped
+    sysctls:
+      - net.ipv4.conf.all.src_valid_mark=1
+      - net.ipv6.conf.all.disable_ipv6=1
+  deluge:
+    image: linuxserver/deluge
+    container_name: deluge
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - DELUGE_LOGLEVEL=info
+    volumes:
+      - ./deluge/config1:/config
+      - pathtoNAS:/downloads
+    network_mode: service:gluetun
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+  radarr:
+    image: linuxserver/radarr
+    container_name: radarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - ./radarr/config:/config
+      - pathtoNAS:/downloads
+    network_mode: service:gluetun
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+  sonarr:
+    image: linuxserver/sonarr
+    container_name: sonarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - ./sonarr/config_2:/config
+      - pathtoNAS:/downloads
+    network_mode: service:gluetun
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+  prowlarr:
+    image: linuxserver/prowlarr
+    container_name: prowlarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - ./prowlarr/config:/config
+    network_mode: service:gluetun
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+  jellyseerr:
+    image: fallenbagel/jellyseerr:latest
+    container_name: jellyseerr
+    environment:
+      - TZ=Etc/UTC
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - ./jellyseerr/config:/app/config
+    ports:
+      - 5055:5055
+    networks:
+      - npm-net
+    depends_on:
+      - app
+    restart: unless-stopped
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: unless-stopped
+    environment:
+      DOMAIN: http://redacted.org
+      WEBSOCKET_ENABLED: "true"
+    volumes:
+      - pathtoNAS:/data/
+    expose:
+      - "80"
+    networks:
+      - npm-net
+  app:
+    image: jc21/nginx-proxy-manager:2.12.3
+    container_name: nginx-proxy-manager
+    restart: unless-stopped
+    ports:
+      - 80:80
+      - 443:443
+      - 81:81
+    environment:
+      DISABLE_IPV6: "true"
+    volumes:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt
+    networks:
+      - npm-net
+networks:
+  npm-net:
+    driver: bridge
